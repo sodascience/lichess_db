@@ -11,8 +11,8 @@ from plotnine import (
     theme_538,
     labs,
 )
-from data_loader import LichessDataLoader
-from lichess_download import LichessDownloader, decompress_file
+from data_downloader import LichessDownloader, decompress_file
+from data_converter import LichessDataLoader
 
 # Folder paths
 raw_folder = Path("raw_data")
@@ -33,7 +33,7 @@ for zstfile in raw_folder.glob("*.zst"):
 # convert pgn files to parquet
 converter = LichessDataLoader(parquet_dir=pqt_folder)
 for pgn_file in pgn_folder.glob("*.pgn"):
-    converter.convert_pgn(pgn_path=pgn_file)
+    converter.convert_pgn(pgn_path=pgn_file, chunk_size=None)
 
 # do some fun stuff!
 df = pl.read_parquet("lichess_parquet", use_pyarrow=True).lazy()
