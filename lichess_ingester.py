@@ -50,7 +50,7 @@ def ndjson_to_parquet(ndjson_path, parquet_path):
 
 
 # Data url
-def read_and_process(year: int, month: int, dir_parquet: str = "lichess_parquet", bar_pos: int = 0):
+def read_and_process(year: int, month: int, dir_parquet: str = "lichess_parquet"):
     """
     Download, process, and convert chess games data from the Lichess database to Parquet format.
 
@@ -96,19 +96,18 @@ def read_and_process(year: int, month: int, dir_parquet: str = "lichess_parquet"
         game = []
         
         # Start progres bar (approximate bytes since the raw file is compressed and we are uncompressing on the fly)
-        progress_bar = tqdm(total=num_bytes*5.2, unit="iB", unit_scale=True, miniters=100, desc=f"{year}-{month:02}", position=bar_pos)
+        progress_bar = tqdm(total=num_bytes*5.2, unit="iB", unit_scale=True, miniters=100, desc=f"{year}-{month:02}")
         for line in text_stream:
             progress_bar.update(len(line))
             if looking_for_game: # Looking for the start of the game
                 if line.startswith("["):
                     looking_for_game = False
-            else:
-                if not line.startswith("["): # Game just ended, dump to NDJSON file
-                    looking_for_game = True
-                    fout.write(json.dumps(dict(game))+"\n")
-                    game = []
-                else: # Game continues, keep appending
-                    game.append(re.findall(pattern,line)[0])
+            elif not line.startswith("["): # Game just ended, dump to NDJSON file
+                looking_for_game = True
+                fout.write(json.dumps(dict(game)) + "\n")
+                game = []
+            else: # Game continues, keep appending
+                game.append(re.findall(pattern,line)[0])
     
         # Clean up
         progress_bar.close()
