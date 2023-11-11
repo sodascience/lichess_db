@@ -1,5 +1,3 @@
-python-chess
 zstandard
 polars
 tqdm
-plotnine
