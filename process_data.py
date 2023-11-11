@@ -1,8 +1,8 @@
 from lichess_ingester import read_and_process
 
 def main():
-    pq_dir = "lichess_parquet_raw"
-    years = [2015]
+    pq_dir = "lichess_parquet"
+    years = [2016, 2017, 2018]
 
     i = 0
     arguments = [(y, m + 1, pq_dir) for y in years for m in range(12)]
