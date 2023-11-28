@@ -99,7 +99,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str):
         .with_columns(pl.when(pl.all() != "?").then(pl.all()))
         # now, do light data transformation
         .with_columns(
-            pl.col(int_cols).cast(pl.Int32),
+            pl.col(int_cols).str.replace(r"\+", "").cast(pl.Int32),
             pl.col("UTCDate").str.to_date(format="%Y.%m.%d"),
             pl.col("UTCTime").str.to_time(),
             pl.col("Site").str.replace("https://lichess.org/", "").alias("ID"),
