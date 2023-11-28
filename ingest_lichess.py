@@ -8,7 +8,7 @@ def main():
     pq_dir = "lichess_parquet"
     years = range(2013, 2024)
     months = range(1, 13)
-    arguments = [(y, m + 1, pq_dir) for y in years for m in months]
+    arguments = [(y, m, pq_dir) for y in years for m in months]
 
     for a in arguments:
         if (Path(pq_dir) / f"{a[0]}_{a[1]:02}.parquet").exists():
