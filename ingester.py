@@ -44,7 +44,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
     # Connect to url and create tempfile
     with (
         requests.get(url, stream=True, timeout=1) as response,
-        tempfile.TemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
+        tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
     ):
         # get basic info, make sure connection was successful
         response.raise_for_status()
