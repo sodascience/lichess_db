@@ -8,7 +8,8 @@ from tqdm import tqdm
 import zstandard as zstd
 import polars as pl
 
-def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parquet"):
+def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parquet", 
+                        include_moves: bool = False):
     """
     Download, process, and convert chess games data from the Lichess database to Parquet format.
 
@@ -46,6 +47,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         requests.get(url, stream=True, timeout=1) as response,
         tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
     ):
+        
         # get basic info, make sure connection was successful
         response.raise_for_status()
         num_bytes = int(response.headers.get("content-length", 0))
@@ -57,6 +59,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         # set up required vars for looping over each line
         looking_for_game = True
         game = []
+        moves = None
 
         # Start progres bar (approximate bytes since the raw file is
         # compressed and we are uncompressing on the fly)
@@ -74,22 +77,33 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
             if looking_for_game:  # Looking for the start of the game
                 if line.startswith("["):
                     looking_for_game = False
-            elif not line.startswith("["):  # Game just ended, dump to NDJSON file
+            elif line.startswith("1."):
+                moves = line
+            elif not line.startswith("[") and moves is not None:  # Game just ended, dump to NDJSON file
                 looking_for_game = True
+                if include_moves:
+                    game.append(("Moves", moves))
                 temp_file.write(json.dumps(dict(game)) + "\n")
                 game = []
-            else:  # Game continues, keep appending
+                moves = None
+            elif line.startswith("["):  # Game continues, keep appending
                 game.append(re.findall(pattern, line)[0])
 
         # Clean up
         progress_bar.close()
 
         # convert to parquet
-        _ndjson_to_parquet(temp_file.name, f"{dir_parquet}/{year}_{month:02}.parquet")
+        _ndjson_to_parquet(temp_file.name, f"{dir_parquet}/{year}_{month:02}.parquet", include_moves)
 
 
-def _ndjson_to_parquet(ndjson_path: str, parquet_path: str):
+def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
     """Creates a cleaned dataframe from an ndjson of lichess header info."""
+    cols = ["ID", "UTCDate", "UTCTime", "White", "Black", "Result", "WhiteElo", "BlackElo",
+            "WhiteRatingDiff", "BlackRatingDiff", "ECO", "Opening", "TimeControl", "Termination" ]
+
+    if include_moves:
+        cols.append("Moves")
+
     int_cols = ["WhiteElo", "BlackElo", "WhiteRatingDiff", "BlackRatingDiff"]
     df = (
         # create lazy dataframe
@@ -105,24 +119,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str):
             pl.col("Site").str.replace("https://lichess.org/", "").alias("ID"),
         )
         # lastly, select only what we need
-        .select(
-            [
-                "ID",
-                "UTCDate",
-                "UTCTime",
-                "White",
-                "Black",
-                "Result",
-                "WhiteElo",
-                "BlackElo",
-                "WhiteRatingDiff",
-                "BlackRatingDiff",
-                "ECO",
-                "Opening",
-                "TimeControl",
-                "Termination",
-            ]
-        )
+        .select(cols)
     )
-    df.collect(streaming=True).write_parquet(parquet_path)
+    df.collect(streaming=True).write_parquet(parquet_path, compression='uncompressed', use_pyarrow=True)
     return parquet_path
