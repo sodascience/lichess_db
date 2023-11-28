@@ -11,7 +11,7 @@ def main(start, end, pq_dir):
     pq_dir.mkdir(parents=True, exist_ok=True)
 
     years = range(start, end)
-    months = range(1, 13)
+    months = range(1, 12)
     arguments = [(y, m + 1, pq_dir) for y in years for m in months]
 
     for a in arguments:
