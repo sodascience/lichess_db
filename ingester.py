@@ -104,7 +104,8 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
     """Creates a cleaned dataframe from an ndjson of lichess header info."""
     cols = ["ID", "UTCDate", "UTCTime", "White", "Black", "Result", "WhiteElo", "BlackElo",
-            "WhiteRatingDiff", "BlackRatingDiff", "ECO", "Opening", "TimeControl", "Termination" ]
+            "WhiteTitle", "BlackTitle", "WhiteRatingDiff", "BlackRatingDiff", "ECO",
+            "Opening", "TimeControl", "Termination" ]
 
     if include_moves:
         cols.append("Moves")
