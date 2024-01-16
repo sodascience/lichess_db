@@ -4,6 +4,7 @@ import tempfile
 import json
 import re
 import requests
+import logging
 from tqdm import tqdm
 import zstandard as zstd
 import polars as pl
@@ -44,7 +45,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
 
     # Connect to url and create tempfile
     with (
-        requests.get(url, stream=True, timeout=1) as response,
+        requests.get(url, stream=True, timeout=10) as response,
         tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
     ):
         
@@ -71,6 +72,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
             desc=f"{year}_{month:02}",
         )
 
+        logging.debug("Collecting data from stream")
         # Start loop
         for line in text_stream:
             progress_bar.update(len(line))
@@ -89,9 +91,12 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
             elif line.startswith("["):  # Game continues, keep appending
                 game.append(re.findall(pattern, line)[0])
 
+        # Avoid 'hanging' progress bars due to approximation/actual value-mismatch
+        progress_bar.update(num_bytes * 5.2)
         # Clean up
         progress_bar.close()
 
+        logging.debug("Converting ndjson to Parquet")
         # convert to parquet
         _ndjson_to_parquet(temp_file.name, f"{dir_parquet}/{year}_{month:02}.parquet", include_moves)
 
@@ -105,7 +110,9 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
         cols.append("Moves")
 
     int_cols = ["WhiteElo", "BlackElo", "WhiteRatingDiff", "BlackRatingDiff"]
-    df = (
+
+    logging.debug("Creating dataframe")
+    lf = (
         # create lazy dataframe
         pl.scan_ndjson(ndjson_path)
         # transform all ? values into nulls
@@ -121,5 +128,8 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
         # lastly, select only what we need
         .select(cols)
     )
-    df.collect(streaming=True).write_parquet(parquet_path, compression='uncompressed', use_pyarrow=True)
+
+    logging.debug("Writing '%s" % parquet_path)
+    lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
+    
     return parquet_path
