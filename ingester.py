@@ -3,13 +3,13 @@ import io
 import tempfile
 import json
 import re
-import requests
 import logging
+import requests
 from tqdm import tqdm
 import zstandard as zstd
 import polars as pl
 
-def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parquet", 
+def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parquet",
                         include_moves: bool = False):
     """
     Download, process, and convert chess games data from the Lichess database to Parquet format.
@@ -22,12 +22,15 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
     Parameters:
         year (int): The year of the dataset to download.
         month (str): The month of the dataset to download.
-        dir_parquet (str, optional): Directory where Parquet files will be saved. Defaults to "../lichess_parquet".
+        dir_parquet (str, optional): Directory where Parquet files will be saved. Defaults
+        to "../lichess_parquet".
 
-    The function constructs a URL to stream the dataset from, uses regular expressions to parse the data,
-    and utilizes Zstandard for decompression. Progress is tracked and displayed using a progress bar.
+    The function constructs a URL to stream the dataset from, uses regular expressions to parse
+    the data, and utilizes Zstandard for decompression. Progress is tracked and displayed using
+    a progress bar.
 
-    The final dataset is written into the `dir_parquet` directory with a filename based on the `year` and `month`
+    The final dataset is written into the `dir_parquet` directory with a filename based on the
+    `year` and `month`
 
     Example:
         process_lichess_data(2023, 1) # This will process games from January 2023.
@@ -48,7 +51,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         requests.get(url, stream=True, timeout=10) as response,
         # tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
     ):
-        
+
         # get basic info, make sure connection was successful
         response.raise_for_status()
         num_bytes = int(response.headers.get("content-length", 0))
@@ -80,12 +83,14 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         # Start loop
         for line in text_stream:
             progress_bar.update(len(line))
-            if looking_for_game:  # Looking for the start of the game
+            if looking_for_game:
+                 # Looking for the start of the game
                 if line.startswith("["):
                     looking_for_game = False
             elif line.startswith("1."):
                 moves = line
-            elif not line.startswith("[") and moves is not None:  # Game just ended, dump to NDJSON file
+            elif not line.startswith("[") and moves is not None:
+                # Game just ended, dump to NDJSON file
                 if include_moves:
                     game.append(("Moves", moves))
                 game_df=dict(game)
@@ -94,7 +99,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
                     if field not in game_df:
                         game_df.update({field: '-'})
                 temp_files[-1].write(json.dumps(game_df) + "\n")
-                
+
                 looking_for_game = True
                 game = []
                 moves = None
@@ -102,7 +107,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
                 if games>=1e6:
                     temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
                     games = 0
-                    
+
             elif line.startswith("["):  # Game continues, keep appending
                 game.append(re.findall(pattern, line)[0])
 
@@ -115,7 +120,8 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
     # convert to parquet
     batch = 0
     for temp_file in temp_files:
-        _ndjson_to_parquet(temp_file.name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves)
+        _ndjson_to_parquet(temp_file.name,
+                           f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves)
         batch += 1
 
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
@@ -147,7 +153,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
         .select(cols)
     )
 
-    logging.info("Writing '%s" % parquet_path)
+    logging.info("Writing '%s", parquet_path)
     lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
-    
+
     return parquet_path
