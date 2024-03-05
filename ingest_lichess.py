@@ -29,8 +29,8 @@ if __name__ == "__main__":
     parser.add_argument('--start', type=int, default=2013)
     parser.add_argument('--end', type=int, default=datetime.date.today().year)
     parser.add_argument('--months', nargs='+', type=int)
-    parser.add_argument('--include-moves', type=bool, default=False)
-    parser.add_argument('--debug', type=bool, default=False)
+    parser.add_argument('--include-moves', action='store_true', default=False)
+    parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--parquet-dir', type=Path, default="./lichess_parquet")
     args=parser.parse_args()
 

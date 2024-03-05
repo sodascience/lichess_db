@@ -46,7 +46,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
     # Connect to url and create tempfile
     with (
         requests.get(url, stream=True, timeout=10) as response,
-        tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
+        # tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
     ):
         
         # get basic info, make sure connection was successful
@@ -61,6 +61,8 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         looking_for_game = True
         game = []
         moves = None
+        games = 0
+        temp_files=[]
 
         # Start progres bar (approximate bytes since the raw file is
         # compressed and we are uncompressing on the fly)
@@ -72,6 +74,8 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
             desc=f"{year}_{month:02}",
         )
 
+        temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
+
         logging.debug("Collecting data from stream")
         # Start loop
         for line in text_stream:
@@ -82,12 +86,23 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
             elif line.startswith("1."):
                 moves = line
             elif not line.startswith("[") and moves is not None:  # Game just ended, dump to NDJSON file
-                looking_for_game = True
                 if include_moves:
                     game.append(("Moves", moves))
-                temp_file.write(json.dumps(dict(game)) + "\n")
+                game_df=dict(game)
+                # these fields are missing when w/o value
+                for field in ['BlackTitle', 'WhiteTitle']:
+                    if field not in game_df:
+                        game_df.update({field: '-'})
+                temp_files[-1].write(json.dumps(game_df) + "\n")
+                
+                looking_for_game = True
                 game = []
                 moves = None
+                games += 1
+                if games>=1e6:
+                    temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
+                    games = 0
+                    
             elif line.startswith("["):  # Game continues, keep appending
                 game.append(re.findall(pattern, line)[0])
 
@@ -96,10 +111,12 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         # Clean up
         progress_bar.close()
 
-        logging.debug("Converting ndjson to Parquet")
-        # convert to parquet
-        _ndjson_to_parquet(temp_file.name, f"{dir_parquet}/{year}_{month:02}.parquet", include_moves)
-
+    logging.debug("Converting ndjson to Parquet")
+    # convert to parquet
+    batch = 0
+    for temp_file in temp_files:
+        _ndjson_to_parquet(temp_file.name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves)
+        batch += 1
 
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
     """Creates a cleaned dataframe from an ndjson of lichess header info."""
@@ -130,7 +147,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
         .select(cols)
     )
 
-    logging.debug("Writing '%s" % parquet_path)
+    logging.info("Writing '%s" % parquet_path)
     lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
     
     return parquet_path
