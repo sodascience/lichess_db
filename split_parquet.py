@@ -22,7 +22,7 @@ def split_parquet(source: str, target: str, mode: str='append') -> None:
     if Path(source).is_file():
         pfiles=[Path(source)]
     else:
-        pfiles=glob.glob(glob.escape(source) + "*.parquet")
+        pfiles=glob.glob(str(Path(source).resolve()) + "/*.parquet")
 
     logger.info(f"Found {len(pfiles)} files in '{source}'")
 
