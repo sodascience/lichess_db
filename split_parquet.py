@@ -7,12 +7,13 @@ from pathlib import Path
 
 logger=logging.getLogger()
 
-def split_parquet(source: str, target: str, mode: str) -> None:
+def split_parquet(source: str, target: str, mode: str='append') -> None:
     """Split existing Parquet files with Lichess chess games into folders and files.
 
     Parameters:
         source (str): folder containing source Parquet files.
         target (str): root folder of resulting folders with Parquet files.
+        mode {append, overwrite}: append to existing Parquet files or overwrite them.
 
     The function will create folders based on Elo-rating buckets, and new Parquet files based
     on games' year and month of play. This restructuring is intended to allow easier typical 
@@ -87,6 +88,7 @@ def _split_file(pfile, target, mode):
 
             if Path(parquet_path).is_file():
                 if mode=='append':
+                    # parquet has no append, so read existing data, concat to new, and delete file
                     new_df = pd.concat([pd.read_parquet(parquet_path, engine='pyarrow'), new_df])
                 Path.unlink(parquet_path)
             
