@@ -8,7 +8,6 @@ from ingester import ingest_lichess_data
 
 def main(start, end, pq_dir, months=None, include_moves=False):
     """Download data with a check for existing parquet files."""
-    # pq_dir = "lichess_parquet"
     pq_dir.mkdir(parents=True, exist_ok=True)
 
     years = range(start, end)

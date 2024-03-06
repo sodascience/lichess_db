@@ -9,14 +9,14 @@ from tqdm import tqdm
 import zstandard as zstd
 import polars as pl
 
-def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parquet",
+def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_parquet",
                         include_moves: bool = False):
     """
     Download, process, and convert chess games data from the Lichess database to Parquet format.
 
     This function streams a dataset from the Lichess database, extracts chess game data,
-    and writes it to a temporary NDJSON file. Once a certain number of games are processed,
-    the data is converted to a Polars dataframe and saved to a Parquet file. This process repeats
+    and writes it to temporary NDJSON files. Once a certain number of games are processed,
+    the data is converted to Polars dataframes and saved to Parquet files. This process repeats
     until all games in the dataset have been processed and saved.
 
     Parameters:
@@ -24,16 +24,19 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         month (str): The month of the dataset to download.
         dir_parquet (str, optional): Directory where Parquet files will be saved. Defaults
         to "../lichess_parquet".
+        include_moves (bool, optional; default False): Whether to include games' moves in the
+        saved data. Including moves greatly increases the size of the Parquet files.
 
     The function constructs a URL to stream the dataset from, uses regular expressions to parse
     the data, and utilizes Zstandard for decompression. Progress is tracked and displayed using
-    a progress bar.
+    a progress bar. To avoid memory issues when including moves, the number of games per file
+    is limited to an arbitrary 1M games.
 
-    The final dataset is written into the `dir_parquet` directory with a filename based on the
-    `year` and `month`
+    The final dataset is written into the `dir_parquet` directory with filenames based on
+    `year`, `month` and batch number.
 
     Example:
-        process_lichess_data(2023, 1) # This will process games from January 2023.
+        ingest_lichess_data(2023, 1) # This will process games from January 2023.
     """
 
     # Create data URL
@@ -48,8 +51,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
 
     # Connect to url and create tempfile
     with (
-        requests.get(url, stream=True, timeout=10) as response,
-        # tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+") as temp_file,
+        requests.get(url, stream=True, timeout=10) as response
     ):
 
         # get basic info, make sure connection was successful
@@ -77,6 +79,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
             desc=f"{year}_{month:02}",
         )
 
+        # Create temp file and store in list
         temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
 
         logging.debug("Collecting data from stream")
@@ -94,10 +97,11 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
                 if include_moves:
                     game.append(("Moves", moves))
                 game_df=dict(game)
-                # these fields are missing when w/o value
+                # Add fields that are missing when they have no value
                 for field in ['BlackTitle', 'WhiteTitle']:
                     if field not in game_df:
                         game_df.update({field: '-'})
+                # Write complete game to temp file
                 temp_files[-1].write(json.dumps(game_df) + "\n")
 
                 looking_for_game = True
@@ -105,6 +109,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
                 moves = None
                 games += 1
                 if games>=1e6:
+                    # When 1M games reached, create new temp file
                     temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
                     games = 0
 
@@ -117,7 +122,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         progress_bar.close()
 
     logging.debug("Converting ndjson to Parquet")
-    # convert to parquet
+    # Convert temp files to parquet, one by one
     batch = 0
     for temp_file in temp_files:
         _ndjson_to_parquet(temp_file.name,
@@ -125,7 +130,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "lichess_parqu
         batch += 1
 
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
-    """Creates a cleaned dataframe from an ndjson of lichess header info."""
+    """Creates a cleaned dataframe from an ndjson of Lichess game info."""
     cols = ["ID", "UTCDate", "UTCTime", "White", "Black", "Result", "WhiteElo", "BlackElo",
             "WhiteTitle", "BlackTitle", "WhiteRatingDiff", "BlackRatingDiff", "ECO",
             "Opening", "TimeControl", "Termination" ]
@@ -154,6 +159,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
     )
 
     logging.info("Writing '%s", parquet_path)
+    # gzip and use_pyarrow are required for default Apache Drill compatibility
     lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
 
     return parquet_path
