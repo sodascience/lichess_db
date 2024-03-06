@@ -3,9 +3,8 @@ import argparse
 import glob
 import logging
 import pandas as pd
+from tqdm import tqdm
 from pathlib import Path
-
-logger=logging.getLogger()
 
 def split_parquet(source: str, target: str, mode: str='append') -> None:
     """Split existing Parquet files with Lichess chess games into folders and files.
@@ -24,7 +23,7 @@ def split_parquet(source: str, target: str, mode: str='append') -> None:
     else:
         pfiles=glob.glob(str(Path(source).resolve()) + "/*.parquet")
 
-    logger.info(f"Found {len(pfiles)} files in '{source}'")
+    logging.info(f"Found {len(pfiles)} files in '{source}'")
 
     for pfile in pfiles:
         _split_file(target=Path(target), pfile=pfile, mode=mode)
@@ -44,15 +43,16 @@ def _get_parquet_path(target, elo_bin, year_month):
     return folder / pfile
 
 def _split_file(pfile, target, mode):
-    logger.info(f"Splitting '{pfile}'")
 
     # read source file
     matches = pd.read_parquet(pfile, engine='pyarrow')
 
+    pbar=tqdm(desc=f"Reading '{pfile}'", total=len(matches))
+
     skipped = 0
     dfs = {}
     # iterate games
-    for key, row in matches.iterrows():
+    for _, row in matches.iterrows():
         if row['White'] is None or row['Black'] is None:
             skipped += 1
             continue
@@ -71,8 +71,12 @@ def _split_file(pfile, target, mode):
         # append game to appropriate bucket
         dfs[elo_bin][year_month].append(row)
 
-        if key>0 and key%100000==0:
-            logger.debug(f"{key}")
+        pbar.update(1)
+
+    pbar.update(skipped)
+    pbar.close()
+
+    pbar=tqdm(desc="Writing", total=len(matches)-skipped)
 
     # saving games
     for bin_elo, year_months in dfs.items():
@@ -82,7 +86,7 @@ def _split_file(pfile, target, mode):
                 elo_bin=bin_elo,
                 year_month=year_month)
 
-            logger.info(f"{bin_elo} {year_month} --> {parquet_path} ({len(games)})")
+            # logging.info(f"{bin_elo} {year_month} --> {parquet_path} ({len(games)})")
 
             new_df = pd.DataFrame(games).astype({"UTCTime":str})
 
@@ -97,8 +101,11 @@ def _split_file(pfile, target, mode):
                 compression='gzip',
                 engine='pyarrow',
                 index=False)
+            
+            pbar.update(len(games))
 
-    logger.info(f"Skipped {skipped} games (black or white missing)")
+    pbar.close()
+    logging.info(f"Skipped {skipped} games (black or white missing)")
 
 if __name__=="__main__":
 
@@ -109,7 +116,7 @@ if __name__=="__main__":
     parser.add_argument('--debug', action='store_true')
     args=parser.parse_args()
 
-    logger.setLevel(logging.DEBUG if args.debug else logging.INFO)
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
     split_parquet(
         source=args.input_path,
