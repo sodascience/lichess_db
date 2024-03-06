@@ -1,9 +1,9 @@
 """Download and process data from database.lichess.org"""
 import logging
 import argparse
+import datetime
 from pathlib import Path
 from ingester import ingest_lichess_data
-import datetime
 
 
 def main(start, end, pq_dir, months=None, include_moves=False):
@@ -16,11 +16,11 @@ def main(start, end, pq_dir, months=None, include_moves=False):
         months = range(1, 13)
     arguments = [(y, m, pq_dir, include_moves) for y in years for m in months]
 
-    for a in arguments:
-        if (Path(pq_dir) / f"{a[0]}_{a[1]:02}.parquet").exists():
-            print(f"{a[0]}_{a[1]:02} exists. Skipping...")
+    for arg in arguments:
+        if (Path(pq_dir) / f"{arg[0]}_{arg[1]:02}.parquet").exists():
+            print(f"{arg[0]}_{arg[1]:02} exists. Skipping...")
             continue
-        ingest_lichess_data(*a)
+        ingest_lichess_data(*arg)
 
 
 if __name__ == "__main__":
@@ -37,7 +37,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.INFO)
 
     main(
-        start=args.start, 
+        start=args.start,
         end=args.end,
         months=args.months,
         include_moves=args.include_moves,
