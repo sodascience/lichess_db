@@ -2,9 +2,9 @@
 import argparse
 import glob
 import logging
+from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
-from pathlib import Path
 
 def split_parquet(source: str, target: str) -> None:
     """Reorganize existing Parquet files with Lichess chess games into folders and files.
@@ -13,7 +13,7 @@ def split_parquet(source: str, target: str) -> None:
         source (str): folder containing source Parquet files.
         target (str): root folder of resulting folders with Parquet files.
 
-    The function will create folders based on bucketed Elo-ratings, containing batches of new 
+    The function will create folders based on bucketed Elo-ratings, containing batches of new
     Parquet files based on games' year and month of play. This restructuring is intended to
     support easier typical queries through Apache Drill.
     """
@@ -22,7 +22,7 @@ def split_parquet(source: str, target: str) -> None:
     else:
         pfiles=glob.glob(str(Path(source).resolve()) + "/*.parquet")
 
-    logging.info(f"Found {len(pfiles)} files in '{source}'")
+    logging.info("Found %s files in '%s'", len(pfiles), source)
 
     for pfile in pfiles:
         _split_file(target=Path(target), pfile=pfile)
@@ -61,7 +61,7 @@ def _split_file(pfile, target):
         if row['White'] is None or row['Black'] is None:
             skipped += 1
             continue
-        
+
         # determine Elo-bin
         elo_bin = _bin_elo(int(min(row['WhiteElo'], row['BlackElo'])))
         # get datestring
@@ -81,7 +81,7 @@ def _split_file(pfile, target):
     pbar.update(skipped)
     pbar.close()
 
-    logging.info(f"Skipped {skipped} games (black or white missing)")
+    logging.info("Skipped %s games (black or white missing)", skipped)
 
     pbar=tqdm(desc="Writing", total=len(matches)-skipped)
     saved=[]
@@ -95,7 +95,7 @@ def _split_file(pfile, target):
                 year_month=year_month)
 
             saved.append(f"{str(parquet_path)[len(str(target)):]} ({len(games)})")
-            
+
             (pd.DataFrame(games)
                 .astype({"UTCTime":str})
                 .to_parquet(
