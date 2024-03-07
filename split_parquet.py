@@ -20,14 +20,14 @@ def split_parquet(source: str, target: str) -> None:
     if Path(source).is_file():
         pfiles=[Path(source)]
     else:
-        pfiles=glob.glob(str(Path(source).resolve()) + "/*.parquet")
+        pfiles=[Path(x) for x in glob.glob(str(Path(source).resolve()) + "/*.parquet")]
 
     logging.info("Found %s files in '%s'", len(pfiles), source)
 
     for pfile in pfiles:
         _split_file(target=Path(target), pfile=pfile)
 
-def _bin_elo(elo):
+def _bin_elo(elo: int) -> str:
     if elo<700:
         return '0-700'
     if elo>=3000:
@@ -35,7 +35,7 @@ def _bin_elo(elo):
     lower=(elo//100)*100
     return f"{lower}-{lower+100}"
 
-def _get_parquet_path(target, elo_bin, year_month):
+def _get_parquet_path(target: Path, elo_bin: str, year_month: str) -> Path:
 
     def format_filename(batch):
         return f"{year_month}__{batch:003}.parquet"
@@ -47,12 +47,12 @@ def _get_parquet_path(target, elo_bin, year_month):
         batch += 1
     return folder / format_filename(batch)
 
-def _split_file(pfile, target):
+def _split_file(pfile: Path, target: Path) -> None:
 
     # read source file
     matches = pd.read_parquet(pfile, engine='pyarrow')
 
-    pbar=tqdm(desc=f"Reading '{Path(pfile).name}'", total=len(matches))
+    pbar=tqdm(desc=f"Reading '{pfile.name}'", total=len(matches))
 
     skipped = 0
     dfs = {}
@@ -110,7 +110,6 @@ def _split_file(pfile, target):
 
     for item in saved:
         logging.debug(item)
-
 
 if __name__=="__main__":
 
