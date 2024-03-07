@@ -38,9 +38,11 @@ chess_df.head().collect()
 
 Apache Drill benefits from files that are separated along the boundaries of common queries. Run the following command to split Parquet files:
 ```bash
-python split_parquet.py -i <input folder with downloaded files>  -o <output folder for split files>
+python split_parquet.py \
+    -i <input folder with downloaded files>  \
+    -o <output folder for split files>
 ```
-The will create folders based on bucketed Elo-ratings (`0-700`, `700-800`, ...,  `2900-3000`), each containing one file per year/month with games of which the lowest ranked player falls in the corresponding Elo-bucket.
+The will create folders based on bucketed Elo-ratings (`0-700`, `700-800`, ...,  `2900-3000`), each containing batches of files for each year/month with games of which the lowest ranked player falls in the corresponding Elo-bucket.
 
 ## Some plots
 
