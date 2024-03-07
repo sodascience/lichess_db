@@ -19,10 +19,28 @@ chess_df.head().collect()
 ## Installation and usage
 
 1. Clone or download this repository
-2. `pip install -r requirements.txt`
+2. Install requirements: `pip install -r requirements.txt`
 3. `python ingest_lichess.py`
-4. Wait a good while (this results in tens of gigabytes of data!!)
+
+    The command accepts the following arguments:
+    + `--start` start year for download (default: 2013)
+    + `--end` end year (default: current year)
+    + `--months` months to download; list months by number, seperated by spaces (example `--months 1 2 3` for first quarter) (optional; defaults to all months)
+    + `--parquet-dir` path to write Parquet-files to (default: `./lichess_parquet`)
+    + `--include-moves` whether to include each game's moves in the data (default: False). Take care, this increases the size of the data dramatically.
+    + `--debug` display debug info while downloading (default: False)
+
+4. Wait a good while (this results in tens of gigabytes of data!!). To avoid memory problems while downloading, there is a limit of 1M games per Parquet file. Hence, there will be multiple files per year/month (`2023_05_001.parquet`, `2023_05_002.parquet`, etc).
+
 5. Open [`eda.ipynb`](eda.ipynb) and run the code!
+
+### Splitting files (for Apache Drill)
+
+Apache Drill benefits from files that are separated along the boundaries of common queries. Run the following command to split Parquet files:
+```bash
+python split_parquet.py -i <input folder with downloaded files>  -o <output folder for split files>
+```
+The will create folders based on bucketed Elo-ratings (`0-700`, `700-800`, ...,  `2900-3000`), each containing one file per year/month with games of which the lowest ranked player falls in the corresponding Elo-bucket.
 
 ## Some plots
 
