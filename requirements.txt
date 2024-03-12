@@ -1,3 +1,4 @@
 zstandard
 polars
 tqdm
+pyarrow
