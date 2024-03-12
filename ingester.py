@@ -1,6 +1,6 @@
 """Module to download and convert lichess data headers to parquet files directory."""
 import io
-import tempfile
+from tempfile import NamedTemporaryFile as TempFile
 import json
 import re
 import logging
@@ -53,7 +53,6 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
     with (
         requests.get(url, stream=True, timeout=10) as response
     ):
-
         # get basic info, make sure connection was successful
         response.raise_for_status()
         num_bytes = int(response.headers.get("content-length", 0))
