@@ -79,7 +79,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
         )
 
         # Create temp file and store in list
-        temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
+        temp_files.append(TempFile(suffix=".ndjson", mode="w+"))
 
         logging.debug("Collecting data from stream")
         # Start loop
@@ -109,7 +109,7 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
                 games += 1
                 if games>=1e6:
                     # When 1M games reached, create new temp file
-                    temp_files.append(tempfile.NamedTemporaryFile(suffix=".ndjson", mode="w+"))
+                    temp_files.append(TempFile(suffix=".ndjson", mode="w+"))
                     games = 0
 
             elif line.startswith("["):  # Game continues, keep appending
