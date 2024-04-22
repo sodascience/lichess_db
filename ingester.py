@@ -100,6 +100,9 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
                 for field in ['BlackTitle', 'WhiteTitle']:
                     if field not in game_df:
                         game_df.update({field: '-'})
+
+                game_df.update({'DateTime': f"{game_df['UTCDate']} {game_df['UTCTime']}"})
+
                 # Write complete game to temp file
                 temp_files[-1].write(json.dumps(game_df) + "\n")
 
@@ -134,6 +137,8 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
             "WhiteTitle", "BlackTitle", "WhiteRatingDiff", "BlackRatingDiff", "ECO",
             "Opening", "TimeControl", "Termination" ]
 
+    cols.append("DateTime")
+
     if include_moves:
         cols.append("Moves")
 
@@ -151,6 +156,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
             pl.col(int_cols).str.replace(r"\+", "").cast(pl.Int32),
             pl.col("UTCDate").str.to_date(format="%Y.%m.%d"),
             pl.col("UTCTime").str.to_time(format="%H:%M:%S"),
+            pl.col("DateTime").str.to_datetime(format="%Y.%m.%d %H:%M:%S"),
             pl.col("Site").str.replace("https://lichess.org/", "").alias("ID"),
         )
         # lastly, select only what we need
@@ -158,6 +164,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
     )
 
     logging.info("Writing '%s", parquet_path)
+    
     # gzip and use_pyarrow are required for default Apache Drill compatibility
     lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
 
