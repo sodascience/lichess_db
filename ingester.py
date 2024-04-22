@@ -150,7 +150,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
         .with_columns(
             pl.col(int_cols).str.replace(r"\+", "").cast(pl.Int32),
             pl.col("UTCDate").str.to_date(format="%Y.%m.%d"),
-            pl.col("UTCTime").str.to_time(),
+            pl.col("UTCTime").str.to_time(format="%H:%M:%S"),
             pl.col("Site").str.replace("https://lichess.org/", "").alias("ID"),
         )
         # lastly, select only what we need
