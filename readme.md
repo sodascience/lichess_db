@@ -1,6 +1,6 @@
 # Lichess database to parquet converter
 
-ThIn this repository, you can find code to efficiently download millions of chess games from [database.lichess.org](https://database.lichess.org) to a folder with Apache `parquet` files, which can be queried efficiently using [`polars`](https://pola.rs):
+ThIn this repository, you can find code to efficiently download millions of chess games from [database.lichess.org](https://database.lichess.org) to your computer using Apache `parquet` files, which can be loaded to tables efficiently using [`polars`](https://pola.rs):
 
 ```python
 import polars as pl
