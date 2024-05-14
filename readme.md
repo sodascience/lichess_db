@@ -44,6 +44,18 @@ The most popular openings are as follows:
 
 
 
+## Contributing
+
+Contributions are what make the open source community an amazing place
+to learn, inspire, and create. Any contributions you make are **greatly
+appreciated**.
+
+Please refer to the
+[CONTRIBUTING](https://github.com/sodascience/lichess_db/blob/main/CONTRIBUTING.md)
+file for more information on issues and pull requests.
+
+
+
 ## License and citation
 
 The package `lichess_db` is published under an MIT license. <!-- When using `lichess_db` for academic work, please cite:
