@@ -42,3 +42,22 @@ The daily number of games played is increasing strongly over the years.
 The most popular openings are as follows:
 ![](img/opening_plot.png)
 
+
+
+## License and citation
+
+The package `lichess_db` is published under an MIT license. <!-- When using `lichess_db` for academic work, please cite:
+
+   TODO Zenodo
+ -->
+
+## Contact
+
+This project is developed and maintained by the [ODISSEI Social Data
+Science (SoDa)](https://odissei-data.nl/nl/soda/) team.
+
+<img src="soda_logo.png" alt="SoDa logo" width="250px"/>
+
+Do you have questions, suggestions, or remarks? File an issue in the issue
+tracker or feel free to contact the team via
+https://odissei-data.nl/en/using-soda/.
