@@ -1,6 +1,6 @@
 # Lichess database to parquet converter
 
-In this repository, you can find code to convert data from [database.lichess.org](https://database.lichess.org) to a folder with Apache `parquet` files, which can be queried efficiently using [`polars`](https://pola.rs):
+ThIn this repository, you can find code to efficiently download millions of chess games from [database.lichess.org](https://database.lichess.org) to a folder with Apache `parquet` files, which can be queried efficiently using [`polars`](https://pola.rs):
 
 ```python
 import polars as pl
@@ -32,7 +32,7 @@ chess_df.head().collect()
 
 4. Wait a good while (this results in tens of gigabytes of data!!). To avoid memory problems while downloading, there is a limit of 1M games per Parquet file. Hence, there will be multiple files per year/month (`2023_05_001.parquet`, `2023_05_002.parquet`, etc).
 
-5. Open [`eda.ipynb`](eda.ipynb) and run the code!
+5. Open [`eda.ipynb`](eda.ipynb) for examples on how to read, filter and visualize the data
 
 ## Some plots
 
@@ -58,10 +58,9 @@ file for more information on issues and pull requests.
 
 ## License and citation
 
-The package `lichess_db` is published under an MIT license. <!-- When using `lichess_db` for academic work, please cite:
+The package `lichess_db` is published under an MIT license. 
+The [lichess data](https://database.lichess.org/) is licensed under the [Creative Commons CC0 license](https://creativecommons.org/publicdomain/zero/1.0/).
 
-   TODO Zenodo
- -->
 
 ## Contact
 
