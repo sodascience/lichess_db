@@ -1,4 +1,4 @@
 zstandard
-polars
+polars>=0.20
 tqdm
 pyarrow

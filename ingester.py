@@ -142,7 +142,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
               "Site": pl.Utf8,
               "White": pl.Utf8, 
               "Black": pl.Utf8, 
-              "Result": pl.Enum(["1-0", "0-1", "1/2-1/2", "?"]), 
+              "Result": pl.Enum(["1-0", "0-1", "1/2-1/2", "?", "*"]), 
               "WhiteElo": pl.Utf8, 
               "BlackElo": pl.Utf8, 
               "WhiteTitle": pl.Utf8, 
@@ -152,7 +152,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
               "ECO": pl.Utf8, 
               "Opening": pl.Utf8, 
               "TimeControl": pl.Utf8, 
-              "Termination": pl.Enum(["Time forfeit", "Rules infraction", "Normal", "?"]), 
+              "Termination": pl.Enum(["Time forfeit", "Rules infraction", "Normal", "Abandoned", "Unterminated", "?"]), 
               "DateTime": pl.Utf8
             }
 
