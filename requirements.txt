@@ -1,5 +1,5 @@
 python>=3.8
 zstandard
-polars>=0.20.25
+polars>=0.20
 tqdm
 pyarrow

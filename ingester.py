@@ -100,6 +100,10 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
                 for field in ['BlackTitle', 'WhiteTitle']:
                     if field not in game_df:
                         game_df.update({field: '-'})
+
+                # Add concat DateTime field to replace seperate Date & TIme
+                game_df.update({'DateTime': f"{game_df['UTCDate']} {game_df['UTCTime']}"})
+
                 # Write complete game to temp file
                 temp_files[-1].write(json.dumps(game_df) + "\n")
 
@@ -130,34 +134,53 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
 
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
     """Creates a cleaned dataframe from an ndjson of Lichess game info."""
-    cols = ["ID", "UTCDate", "UTCTime", "White", "Black", "Result", "WhiteElo", "BlackElo",
+    cols = ["ID", "White", "Black", "Result", "WhiteElo", "BlackElo",
             "WhiteTitle", "BlackTitle", "WhiteRatingDiff", "BlackRatingDiff", "ECO",
-            "Opening", "TimeControl", "Termination" ]
+            "Opening", "TimeControl", "Termination", "DateTime" ]
+
+    schema = {
+              "Site": pl.Utf8,
+              "White": pl.Utf8, 
+              "Black": pl.Utf8, 
+              "Result": pl.Enum(["1-0", "0-1", "1/2-1/2", "?", "*"]), 
+              "WhiteElo": pl.Utf8, 
+              "BlackElo": pl.Utf8, 
+              "WhiteTitle": pl.Utf8, 
+              "BlackTitle": pl.Utf8, 
+              "WhiteRatingDiff": pl.Utf8, 
+              "BlackRatingDiff": pl.Utf8, 
+              "ECO": pl.Utf8, 
+              "Opening": pl.Utf8, 
+              "TimeControl": pl.Utf8, 
+              "Termination": pl.Enum(["Time forfeit", "Rules infraction", "Normal", "Abandoned", "Unterminated", "?"]), 
+              "DateTime": pl.Utf8
+            }
 
     if include_moves:
         cols.append("Moves")
+        schema["Moves"] = pl.Utf8
 
     int_cols = ["WhiteElo", "BlackElo", "WhiteRatingDiff", "BlackRatingDiff"]
 
     logging.debug("Creating dataframe")
     lf = (
         # create lazy dataframe
-        pl.scan_ndjson(ndjson_path)
+        pl.scan_ndjson(ndjson_path, schema=schema)
         # transform all ? values into nulls
         # see here: https://stackoverflow.com/a/74816042
         .with_columns(pl.when(pl.all() != "?").then(pl.all()))
         # now, do light data transformation
         .with_columns(
-            pl.col(int_cols).str.replace(r"\+", "").cast(pl.Int32),
-            pl.col("UTCDate").str.to_date(format="%Y.%m.%d"),
-            pl.col("UTCTime").str.to_time(),
+            pl.col(int_cols).str.replace(r"\+", "").cast(pl.Int16),
+            pl.col("DateTime").str.to_datetime(format="%Y.%m.%d %H:%M:%S"),
             pl.col("Site").str.replace("https://lichess.org/", "").alias("ID"),
         )
-        # lastly, select only what we need
+        # # lastly, select only what we need
         .select(cols)
     )
 
     logging.info("Writing '%s", parquet_path)
+    
     # gzip and use_pyarrow are required for default Apache Drill compatibility
     lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
 
