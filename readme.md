@@ -1,6 +1,6 @@
 # Lichess database to parquet converter
 
-In this repository, you can find code to convert data from [database.lichess.org](https://database.lichess.org) to a folder with Apache `parquet` files, which can be queried efficiently using [`polars`](https://pola.rs):
+ThIn this repository, you can find code to efficiently download millions of chess games from [database.lichess.org](https://database.lichess.org) to your computer using Apache `parquet` files, which can be loaded to tables efficiently using [`polars`](https://pola.rs):
 
 ```python
 import polars as pl
@@ -32,7 +32,7 @@ chess_df.head().collect()
 
 4. Wait a good while (this results in tens of gigabytes of data!!). To avoid memory problems while downloading, there is a limit of 1M games per Parquet file. Hence, there will be multiple files per year/month (`2023_05_001.parquet`, `2023_05_002.parquet`, etc).
 
-5. Open [`eda.ipynb`](eda.ipynb) and run the code!
+5. Open [`eda.ipynb`](eda.ipynb) for examples on how to read, filter and visualize the data
 
 ## Some plots
 
@@ -42,3 +42,33 @@ The daily number of games played is increasing strongly over the years.
 The most popular openings are as follows:
 ![](img/opening_plot.png)
 
+
+
+## Contributing
+
+Contributions are what make the open source community an amazing place
+to learn, inspire, and create. Any contributions you make are **greatly
+appreciated**.
+
+Please refer to the
+[CONTRIBUTING](https://github.com/sodascience/lichess_db/blob/main/CONTRIBUTING.md)
+file for more information on issues and pull requests.
+
+
+
+## License and citation
+
+The package `lichess_db` is published under an MIT license. 
+The [lichess data](https://database.lichess.org/) is licensed under the [Creative Commons CC0 license](https://creativecommons.org/publicdomain/zero/1.0/).
+
+
+## Contact
+
+This project is developed and maintained by the [ODISSEI Social Data
+Science (SoDa)](https://odissei-data.nl/nl/soda/) team.
+
+<img src="soda_logo.png" alt="SoDa logo" width="250px"/>
+
+Do you have questions, suggestions, or remarks? File an issue in the issue
+tracker or feel free to contact the team via
+https://odissei-data.nl/en/using-soda/.
