@@ -39,6 +39,20 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
         ingest_lichess_data(2023, 1) # This will process games from January 2023.
     """
 
+    # Use temp file for cumulative values
+    try:
+        # Read and decompress the data
+        with open(f"{dir_parquet}/cum_files.json.zst", 'rb') as fin:
+            decompressed_bytes = zstd.ZstdDecompressor().decompress(fin.read())
+
+        # Convert bytes back to JSON object
+        d_cum_games = json.loads(decompressed_bytes.decode('utf-8'))
+
+
+    except FileNotFoundError:
+        logging.debug("Cumulative file not found, recreating from scratch")
+        d_cum_games = dict()
+    
     # Create data URL
     file_name = f"lichess_db_standard_rated_{year}-{month:02}.pgn.zst"
     url = f"https://database.lichess.org/standard/{file_name}"
@@ -90,12 +104,40 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
                 if line.startswith("["):
                     looking_for_game = False
             elif line.startswith("1."):
-                moves = line
+                moves = line.strip()
             elif not line.startswith("[") and moves is not None:
                 # Game just ended, dump to NDJSON file
                 if include_moves:
                     game.append(("Moves", moves))
-                game_df=dict(game)
+                    #if "eval" in modes
+                game_df = dict(game)
+                game_df["Evaluation_flag"] = "eval" in moves
+
+                for player in ["White", "Black"]:
+                    id_player = game_df[player]
+                    # Add cumulative values to game
+                    if game_df[player] not in d_cum_games:
+                        d_cum_games[id_player] = 0
+                    d_cum_games[id_player] += 1
+                    game_df.update({f"{player}_cum_games": d_cum_games[id_player]})
+
+                    # Find max Elo of each player
+                    if d_cum_games.get(f"{id_player}Elo_max") is None:
+                        if game_df[f"{player}Elo"] == "?":
+                            game_df[f"{player}Elo_max"] = ""
+                        else:
+                            d_cum_games[f"{id_player}Elo_max"] = int(game_df[f"{player}Elo"])
+                            game_df[f"{player}Elo_max"] = d_cum_games[f"{id_player}Elo_max"]
+                    else:
+                        if game_df[f"{player}Elo"] == "?":
+                            game_df[f"{player}Elo_max"] = d_cum_games[f"{id_player}Elo_max"]
+                        else:
+                            d_cum_games[f"{id_player}Elo_max"] = max(
+                                int(game_df[f"{player}Elo"]),
+                                d_cum_games[f"{id_player}Elo_max"]
+                            )
+                            game_df[f"{player}Elo_max"] = d_cum_games[f"{id_player}Elo_max"]
+                    
                 # Add fields that are missing when they have no value
                 for field in ['BlackTitle', 'WhiteTitle']:
                     if field not in game_df:
@@ -132,9 +174,15 @@ def ingest_lichess_data(year: int, month: int, dir_parquet: str = "./lichess_par
                            f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves)
         batch += 1
 
+    # Save cumulative values to file
+    compressed_bytes = zstd.ZstdCompressor().compress(json.dumps(d_cum_games).encode('utf-8'))
+    with open(f"{dir_parquet}/cum_files.json.zst", "wb") as fout:
+        fout.write(compressed_bytes)
+
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool):
     """Creates a cleaned dataframe from an ndjson of Lichess game info."""
-    cols = ["ID", "White", "Black", "Result", "WhiteElo", "BlackElo",
+    cols = ["ID", "White", "Black", "Result", "White_cum_games", "Black_cum_games",
+             "WhiteElo", "BlackElo", "WhiteElo_max", "BlackElo_max",
             "WhiteTitle", "BlackTitle", "WhiteRatingDiff", "BlackRatingDiff", "ECO",
             "Opening", "TimeControl", "Termination", "DateTime" ]
 
@@ -145,6 +193,10 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
               "Result": pl.Enum(["1-0", "0-1", "1/2-1/2", "?", "*"]), 
               "WhiteElo": pl.Utf8, 
               "BlackElo": pl.Utf8, 
+              "WhiteElo_max": pl.Int32, 
+              "BlackElo_max": pl.Int32, 
+              "White_cum_games": pl.Int32,
+              "Black_cum_games": pl.Int32,
               "WhiteTitle": pl.Utf8, 
               "BlackTitle": pl.Utf8, 
               "WhiteRatingDiff": pl.Utf8, 
@@ -159,8 +211,11 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
     if include_moves:
         cols.append("Moves")
         schema["Moves"] = pl.Utf8
+        cols.append("Evaluation_flag")
+        schema["Evaluation_flag"] = pl.Boolean
 
     int_cols = ["WhiteElo", "BlackElo", "WhiteRatingDiff", "BlackRatingDiff"]
+    exclude_int = ["White_cum_games", "Black_cum_games", "WhiteElo_max", "BlackElo_max"]
 
     logging.debug("Creating dataframe")
     lf = (
@@ -168,7 +223,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool)
         pl.scan_ndjson(ndjson_path, schema=schema)
         # transform all ? values into nulls
         # see here: https://stackoverflow.com/a/74816042
-        .with_columns(pl.when(pl.all() != "?").then(pl.all()))
+        .with_columns(pl.when(pl.exclude(exclude_int) != "?").then(pl.exclude(exclude_int)))
         # now, do light data transformation
         .with_columns(
             pl.col(int_cols).str.replace(r"\+", "").cast(pl.Int16),

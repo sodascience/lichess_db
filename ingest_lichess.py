@@ -6,7 +6,7 @@ from pathlib import Path
 from ingester import ingest_lichess_data
 
 
-def main(start, end, pq_dir, months=None, include_moves=False):
+def main(start, end, pq_dir, months=None, include_moves=False, restart_counter_games=True):
     """Download data with a check for existing parquet files."""
     pq_dir.mkdir(parents=True, exist_ok=True)
 
@@ -21,6 +21,11 @@ def main(start, end, pq_dir, months=None, include_moves=False):
             continue
         ingest_lichess_data(*arg)
 
+    if restart_counter_games:
+        # Remove the counter file
+        counter_file = Path(pq_dir) / "cum_files.json.zst"
+        if counter_file.exists():
+            counter_file.unlink()
 
 if __name__ == "__main__":
 
@@ -30,6 +35,7 @@ if __name__ == "__main__":
     parser.add_argument('--months', nargs='+', type=int)
     parser.add_argument('--include-moves', action='store_true', default=False)
     parser.add_argument('--debug', action='store_true', default=False)
+    parser.add_argument('--restart-counter-games', action='store_true', default=True)
     parser.add_argument('--parquet-dir', type=Path, default="./lichess_parquet")
     args=parser.parse_args()
 
@@ -40,4 +46,5 @@ if __name__ == "__main__":
         end=args.end,
         months=args.months,
         include_moves=args.include_moves,
-        pq_dir=args.parquet_dir)
+        pq_dir=args.parquet_dir,
+        restart_counter_games=args.restart_counter_games)
