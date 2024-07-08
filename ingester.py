@@ -4,11 +4,13 @@ import logging
 import json
 import re
 import requests
+import threading
 
 import zstandard as zstd
 import polars as pl
 import s3fs
 
+from urllib3.exceptions import ProtocolError
 from collections import defaultdict
 from random import random
 from tempfile import NamedTemporaryFile as TempFile
@@ -85,9 +87,11 @@ def ingest_lichess_data(year: int,
     # Set up the decompressor
     decompressor = zstd.ZstdDecompressor(max_window_size=2**31)
 
-    # Connect to url and create tempfile
+
+    # Connect to url and create tempfile. 
+    # Long timeout since we'll process data every ndjson_size games
     with (
-        requests.get(url, stream=True, timeout=10) as response
+        requests.get(url, stream=True, timeout=360) as response
     ):
         # get basic info, make sure connection was successful
         response.raise_for_status()
@@ -103,11 +107,16 @@ def ingest_lichess_data(year: int,
         moves = None
         games = 0
         batch = 0
+
+        # Start temp file (2 files to allow for parallel data processing and Internet IO)
         if dir_ndjson is None:
-            temp_file = TempFile(suffix=".ndjson", mode="w+")
+            temp_files = [TempFile(prefix="0", suffix=".ndjson", mode="w+"),
+                         TempFile(prefix="1", suffix=".ndjson", mode="w+")]
         else:
             # useful for debugging
-            temp_file = open(f"{dir_ndjson}/temp.ndjson", mode="w+")
+            temp_files = [open(f"{dir_ndjson}/temp_0.ndjson", mode="w+"),
+                         open(f"{dir_ndjson}/temp_1.ndjson", mode="w+")]
+        temp_file = temp_files[0]
 
         # Start progres bar (approximate bytes since the raw file is
         # compressed and we are uncompressing on the fly)
@@ -124,7 +133,7 @@ def ingest_lichess_data(year: int,
         for line in text_stream:
             progress_bar.update(len(line))
             if looking_for_game:
-                 # Looking for the start of the game
+                # Looking for the start of the game
                 if line.startswith("["):
                     looking_for_game = False
                     # Add type of game 
@@ -212,7 +221,7 @@ def ingest_lichess_data(year: int,
                 game_df.update({'DateTime': f"{game_df['UTCDate']} {game_df['UTCTime']}"})
 
                 # Write complete game to temp file
-                temp_file.write(json.dumps(game_df) + "\n")
+                temp_files[batch % 2].write(json.dumps(game_df) + "\n")
 
                 looking_for_game = True
                 game = []
@@ -221,19 +230,22 @@ def ingest_lichess_data(year: int,
 
                 if games >= ndjson_size:
                     if dir_ndjson is not None:
-                        temp_file.close()
+                        temp_files[batch % 2].close()
 
                     # Convert the NDJSON to Parquet
-                    _ndjson_to_parquet(temp_file.name,
-                                    f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs=fs)
+                    threading.Thread(target=_ndjson_to_parquet, args=(temp_files[batch % 2].name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs)).start()
+                    
+                    #_ndjson_to_parquet(temp_file.name,
+                    #                f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs=fs)
                     batch += 1
 
                     # When the max size of ndjson is  reached, create new temp file
                     if dir_ndjson is None:
-                        temp_file = TempFile(suffix=".ndjson", mode="w+")
+                        temp_files[batch % 2] = TempFile(prefix=f"{batch%2}", suffix=".ndjson", mode="w+")
                     else:
                         # useful for debugging
-                        temp_file = open(f"{dir_ndjson}/temp.ndjson", mode="w+")
+                        temp_files[batch % 2] = open(f"{dir_ndjson}/temp_{batch%2}.ndjson", mode="w+")
+                    
                     games = 0
 
         # Avoid 'hanging' progress bars due to approximation/actual value-mismatch
@@ -244,9 +256,10 @@ def ingest_lichess_data(year: int,
         if dir_ndjson is not None:
             temp_file.close()
 
+    threading.Thread(target=_ndjson_to_parquet, args=(temp_file.name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs)).start()
     # Last batch
-    _ndjson_to_parquet(temp_file.name,
-                    f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs=fs)
+    # _ndjson_to_parquet(temp_file.name,
+    #                 f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs=fs)
 
     # Save cumulative values to file
     compressed_bytes = zstd.ZstdCompressor().compress(json.dumps(d_cum_games).encode('utf-8'))
