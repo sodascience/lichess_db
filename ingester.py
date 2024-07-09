@@ -3,6 +3,7 @@ import io
 import logging
 import json
 import re
+import os
 import requests
 import threading
 
@@ -110,14 +111,12 @@ def ingest_lichess_data(year: int,
 
         # Start temp file (2 files to allow for parallel data processing and Internet IO)
         if dir_ndjson is None:
-            temp_files = [TempFile(prefix="0", suffix=".ndjson", mode="w+"),
-                         TempFile(prefix="1", suffix=".ndjson", mode="w+")]
+            temp_file = TempFile(suffix=".ndjson", mode="w+", delete=False)
         else:
+            logging.warning("Providing a dir_ndjson is only recommended for debugging.")
             # useful for debugging
-            temp_files = [open(f"{dir_ndjson}/temp_0.ndjson", mode="w+"),
-                         open(f"{dir_ndjson}/temp_1.ndjson", mode="w+")]
-        temp_file = temp_files[0]
-
+            temp_file = open(f"{dir_ndjson}/temp_0.ndjson", mode="w+")
+        
         # Start progres bar (approximate bytes since the raw file is
         # compressed and we are uncompressing on the fly)
         progress_bar = tqdm(
@@ -221,7 +220,7 @@ def ingest_lichess_data(year: int,
                 game_df.update({'DateTime': f"{game_df['UTCDate']} {game_df['UTCTime']}"})
 
                 # Write complete game to temp file
-                temp_files[batch % 2].write(json.dumps(game_df) + "\n")
+                temp_file.write(json.dumps(game_df) + "\n")
 
                 looking_for_game = True
                 game = []
@@ -229,11 +228,10 @@ def ingest_lichess_data(year: int,
                 games += 1
 
                 if games >= ndjson_size:
-                    if dir_ndjson is not None:
-                        temp_files[batch % 2].close()
+                    temp_file.close()
 
                     # Convert the NDJSON to Parquet
-                    threading.Thread(target=_ndjson_to_parquet, args=(temp_files[batch % 2].name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs)).start()
+                    threading.Thread(target=_ndjson_to_parquet, args=(temp_file.name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs)).start()
                     
                     #_ndjson_to_parquet(temp_file.name,
                     #                f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs=fs)
@@ -241,10 +239,10 @@ def ingest_lichess_data(year: int,
 
                     # When the max size of ndjson is  reached, create new temp file
                     if dir_ndjson is None:
-                        temp_files[batch % 2] = TempFile(prefix=f"{batch%2}", suffix=".ndjson", mode="w+")
+                        temp_file = TempFile(suffix=".ndjson", mode="w+", delete=False)
                     else:
-                        # useful for debugging
-                        temp_files[batch % 2] = open(f"{dir_ndjson}/temp_{batch%2}.ndjson", mode="w+")
+                        # useful for debugging (don't use in production)
+                        temp_file = open(f"{dir_ndjson}/temp_{batch%2}.ndjson", mode="w+")
                     
                     games = 0
 
@@ -256,8 +254,8 @@ def ingest_lichess_data(year: int,
         if dir_ndjson is not None:
             temp_file.close()
 
-    threading.Thread(target=_ndjson_to_parquet, args=(temp_file.name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs)).start()
     # Last batch
+    threading.Thread(target=_ndjson_to_parquet, args=(temp_file.name, f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs)).start()
     # _ndjson_to_parquet(temp_file.name,
     #                 f"{dir_parquet}/{year}_{month:02}_{batch:003}.parquet", include_moves, fs=fs)
 
@@ -271,6 +269,8 @@ def ingest_lichess_data(year: int,
         # Read and decompress the data
         with open(f"{dir_parquet}/cum_files.json.zst", 'wb') as fout:
             fout.write(compressed_bytes)
+
+    return None
 
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool, fs: Optional[s3fs.core.S3FileSystem] = None):
     """Creates a cleaned dataframe from an ndjson of Lichess game info."""
@@ -362,7 +362,7 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool,
         )
         .set_sorted("DateTime")
     )
-    
+
     d_rev_result = {"1-0": "0-1", "0-1": "1-0", "1/2-1/2": "1/2-1/2", "?": "?", "*": "*"}
     # Convert to player-game-role format: i.e., duplicate each game switching White and Black
     lf_inv = lf.select(
@@ -413,4 +413,11 @@ def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool,
         # gzip and use_pyarrow are required for default Apache Drill compatibility
         lf.collect(streaming=True).write_parquet(parquet_path, compression='gzip', use_pyarrow=True)
 
-    return parquet_path
+    
+    try:
+        os.remove(ndjson_path)
+    except Exception as e:
+        logging.error(f"Error cleaning up temporary file: {e}")
+
+
+    return None
