@@ -59,13 +59,20 @@ def ingest_lichess_data(year: int,
 
     # Use temp file for cumulative values
     try:
+        # Read the cumulative values from the previous month
+        if month == 1:
+            year_cum = year - 1
+            month_cum = 12
+        else:
+            year_cum = year
+            month_cum = month - 1
         if isinstance(fs, s3fs.core.S3FileSystem):
             # read cum_files from S3 point
-            with fs.open(f"{dir_parquet}/cum_files.json.zst", mode='rb') as fin:
+            with fs.open(f"{dir_parquet}/cum_files_{year_cum}_{month_cum}.json.zst", mode='rb') as fin:
                 decompressed_bytes = zstd.ZstdDecompressor().decompress(fin.read())
         else:
             # Read and decompress the data
-            with open(f"{dir_parquet}/cum_files.json.zst", 'rb') as fin:
+            with open(f"{dir_parquet}/cum_files_{year_cum}_{month_cum}.json.zst", 'rb') as fin:
                 decompressed_bytes = zstd.ZstdDecompressor().decompress(fin.read())
 
         # Convert bytes back to JSON object
@@ -73,7 +80,7 @@ def ingest_lichess_data(year: int,
 
 
     except FileNotFoundError:
-        logging.debug("Cumulative file not found, recreating from scratch")
+        logging.debug("Cumulative file not found for year %s and month %s. Recreating it from scratch", year_cum, month_cum)
         d_cum_games = dict()
         d_cum_games["All"] = defaultdict(int)
         
@@ -263,11 +270,11 @@ def ingest_lichess_data(year: int,
     compressed_bytes = zstd.ZstdCompressor().compress(json.dumps(d_cum_games).encode('utf-8'))
     if isinstance(fs, s3fs.core.S3FileSystem):
         # read cum_files from S3 point
-        with fs.open(f"{dir_parquet}/cum_files.json.zst", mode='wb') as fout:
+        with fs.open(f"{dir_parquet}/cum_files_{year}_{month}.json.zst", mode='wb') as fout:
             fout.write(compressed_bytes)
     else:
         # Read and decompress the data
-        with open(f"{dir_parquet}/cum_files.json.zst", 'wb') as fout:
+        with open(f"{dir_parquet}/cum_files_{year}_{month}.json.zst", 'wb') as fout:
             fout.write(compressed_bytes)
 
     return None
