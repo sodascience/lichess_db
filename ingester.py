@@ -22,6 +22,8 @@ def ingest_lichess_data(year: int,
                         month: int,
                         dir_parquet: str = "./lichess_parquet",
                         include_moves: bool = False,
+                        n_moves: Optional[int] = 3,
+                        keep_only_evaluated: bool = False,
                         fs: Optional[s3fs.core.S3FileSystem] = None,
                         dir_ndjson: Optional[str] = None,
                         ndjson_size: int = 1e6):
@@ -40,6 +42,8 @@ def ingest_lichess_data(year: int,
         to "../lichess_parquet".
         include_moves (bool, optional; default False): Whether to include games' moves in the
         saved data. Including moves greatly increases the size of the Parquet files.
+        n_moves (int, optional; default 3): Number of moves to keep per game. None for all games.
+        keep_only_evaluated (bool, optional; default False): Whether to keep only evaluated games, or all games.
         fs (s3fs.core.S3FileSystem, optional): If provided, the function will use this filesystem
         to read and write files. Defaults to None.
         dir_ndjson (str, optional): Directory where NDJSON files will be saved. Defaults to None.
@@ -152,9 +156,12 @@ def ingest_lichess_data(year: int,
 
             elif line.startswith("1."):
                 if include_moves:
-                    # Keep only 3 moves
+                    # Keep only n_moves moves
                     moves = line.replace("\n", " ").strip()
-                    moves = moves.split("4.")[0]
+                    if n_moves is not None:
+                        moves = moves.split(f"{n_moves+1}.")[0]
+
+                      
                 else:
                     moves = ""
             elif line.startswith("["):  # Game continues, keep appending
@@ -226,13 +233,20 @@ def ingest_lichess_data(year: int,
                 # Add concat DateTime field to replace seperate Date & TIme
                 game_df.update({'DateTime': f"{game_df['UTCDate']} {game_df['UTCTime']}"})
 
-                # Write complete game to temp file
-                temp_file.write(json.dumps(game_df) + "\n")
+                if keep_only_evaluated:
+                    if game_df["Evaluation_flag"]:
+                        # Write complete game to temp file
+                        temp_file.write(json.dumps(game_df) + "\n")
+                        games += 1
+                else:
+                        # Write complete game to temp file
+                        temp_file.write(json.dumps(game_df) + "\n")
+                        games += 1
 
                 looking_for_game = True
                 game = []
                 moves = None
-                games += 1
+                
 
                 if games >= ndjson_size:
                     temp_file.close()
@@ -278,7 +292,7 @@ def ingest_lichess_data(year: int,
             fout.write(compressed_bytes)
 
     return None
-
+                          
 def _ndjson_to_parquet(ndjson_path: str, parquet_path: str, include_moves: bool, fs: Optional[s3fs.core.S3FileSystem] = None):
     """Creates a cleaned dataframe from an ndjson of Lichess game info."""
     game_cols = ["ID", "ID_random", "Event", "Tournament", "ECO", "Opening", "TimeControl", "Termination", "DateTime"]
