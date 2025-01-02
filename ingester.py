@@ -178,6 +178,7 @@ def ingest_lichess_data(year: int,
 
                 for player in ["White", "Black"]:
                     id_player = game_df[player]
+                    other_player = "White" if player == "Black" else "Black"
 
                     game_type = game_df["Event"]
                     if game_type not in d_cum_games:
@@ -216,11 +217,11 @@ def ingest_lichess_data(year: int,
                     
                     # Max ELO faced
                     max_elo = d_cum_games[game_type][f"{id_player}Elo_max_faced"]
-                    if game_df[f"{player}Elo"] == "?":
+                    if game_df[f"{other_player}Elo"] == "?":
                         game_df[f"{player}Elo_max_faced"] = max_elo
-                    elif int(game_df[f"{player}Elo"]) > max_elo:
-                        d_cum_games[game_type][f"{id_player}Elo_max_faced"] = int(game_df[f"{player}Elo"])
-                        game_df[f"{player}Elo_max_faced"] = int(game_df[f"{player}Elo"])
+                    elif int(game_df[f"{other_player}Elo"]) > max_elo:
+                        d_cum_games[game_type][f"{id_player}Elo_max_faced"] = int(game_df[f"{other_player}Elo"])
+                        game_df[f"{player}Elo_max_faced"] = int(game_df[f"{other_player}Elo"])
                     else:
                         game_df[f"{player}Elo_max_faced"] = max_elo
                     
