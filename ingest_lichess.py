@@ -6,7 +6,8 @@ from pathlib import Path
 from ingester import ingest_lichess_data
 
 
-def main(start, end, pq_dir, months=None, include_moves=False, restart_counter_games=True, dir_ndjson=None, ndjson_size=1e6):
+def main(start, end, pq_dir, months=None, include_moves=False, number_moves=3, keep_only_evaluated=False, 
+         fs=None, restart_counter_games=True, dir_ndjson=None, ndjson_size=1e6):
     """Download data with a check for existing parquet files."""
     pq_dir = Path(pq_dir)
     pq_dir.mkdir(parents=True, exist_ok=True)
@@ -18,7 +19,7 @@ def main(start, end, pq_dir, months=None, include_moves=False, restart_counter_g
     years = range(start, end)
     if months is None:
         months = range(1, 13)
-    arguments = [(y, m, pq_dir, include_moves, dir_ndjson, ndjson_size) for y in years for m in months]
+    arguments = [(y, m, pq_dir, include_moves, number_moves, keep_only_evaluated, fs, dir_ndjson, ndjson_size) for y in years for m in months]
 
     for arg in arguments:
         if (Path(pq_dir) / f"{arg[0]}_{arg[1]:02}.parquet").exists():
@@ -31,7 +32,9 @@ if __name__ == "__main__":
     parser.add_argument('--start', type=int, default=2013)
     parser.add_argument('--end', type=int, default=datetime.date.today().year)
     parser.add_argument('--months', nargs='+', type=int)
-    parser.add_argument('--include-moves', action='store_true', default=False)
+    parser.add_argument('--number-moves', default=3, type=int)
+    parser.add_argument('--keep-only-evaluated', action='store_true', default=False)
+    parser.add_argument('--fs-path', type=str, default=None)
     parser.add_argument('--debug', action='store_true', default=False)
     parser.add_argument('--parquet-dir', type=Path, default="./lichess_parquet")
     parser.add_argument('--dir-ndjson', type=str, default=None)
@@ -46,6 +49,9 @@ if __name__ == "__main__":
         months=args.months,
         include_moves=args.include_moves,
         pq_dir=args.parquet_dir,
+        number_moves=args.number_moves,
+        keep_only_evaluated=args.keep_only_evaluated,
+        fs=args.fs_path,
         dir_ndjson=args.dir_ndjson,
         ndjson_size=args.ndjson_size
         )
